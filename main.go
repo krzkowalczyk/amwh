@@ -37,11 +37,15 @@ func pushBullet(alert template.Alert) {
 		pushBulletAPIToken = os.Getenv("PUSHBULLETAPITOKEN")
 	}
 
+	tr := http.DefaultTransport.(*http.Transport)
+	tr.TLSClientConfig.InsecureSkipVerify = true
+	
 	timeout := time.Duration(5 * time.Second)
 	client := http.Client{
 		Timeout: timeout,
+		Transport: tr,
 	}
-
+	
 	requestBody, err := json.Marshal(map[string]string{
 		"body":        fmt.Sprintf("Started at %s \nStatus: %s \nSeverity: %s \nLabels %v", alert.StartsAt, alert.Status, strings.ToUpper(alert.Labels["severity"]), alert.Labels),
 		"title":       "[" + strings.ToUpper(alert.Labels["severity"]) + "] " + alert.Annotations["summary"],
