@@ -1,0 +1,2 @@
+# amwh
+Alertmanager WebHook Receiver
