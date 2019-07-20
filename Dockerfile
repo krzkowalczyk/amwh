@@ -1,27 +1,17 @@
-# Dockerfile References: https://docs.docker.com/engine/reference/builder/
+FROM golang:1.12.7-alpine as builder
 
-# Start from golang v1.11 base image
-FROM golang:1.12.7
-
-# Add Maintainer Info
-LABEL maintainer="Krzysztof Kowalczyk"
-
-# Set the Current Working Directory inside the container
-WORKDIR $GOPATH/src/github.com/krzkowalczyk/amwh
-
-# Copy everything from the current directory to the PWD(Present Working Directory) inside the container
+WORKDIR /go/src/app
 COPY . .
-
-# Download all the dependencies
-# https://stackoverflow.com/questions/28031603/what-do-three-dots-mean-in-go-command-line-invocations
+RUN apk add git 
 RUN go get -d -v ./...
-
-# Install the package
 RUN go build -o main .
 
-USER 10001
+FROM alpine
 
-# This container exposes port 8080 to the outside world
+RUN apk update && apk add ca-certificates && rm -rf /var/cache/apk/*
+RUN adduser -S -D -H -h /app appuser
+USER appuser
+COPY --from=builder /go/src/app/main /app/
+WORKDIR /app
 EXPOSE 8080
-
 CMD ["./main"]
