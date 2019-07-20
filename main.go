@@ -2,17 +2,24 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/prometheus/alertmanager/template"
 )
+
+// const (
+// 	localCertFile = "/usr/local/internal-ca/ca.crt"
+// )
 
 type responseJSON struct {
 	Status  int
@@ -22,6 +29,13 @@ type responseJSON struct {
 func pushBullet(alert template.Alert) {
 	log.Printf("Sending message to PushBullet")
 
+	localCertFile, _ := os.LookupEnv("CACERTFILE")
+
+	var InsecureSkipVerify = false
+	if os.Getenv("INSECURESKIPVERIFY") != "" {
+		InsecureSkipVerify, _ = strconv.ParseBool(os.Getenv("INSECURESKIPVERIFY"))
+	}
+
 	pushBulletAPIAddr := "https://api.pushbullet.com/v2/pushes"
 	if os.Getenv("PUSHBULLETAPIADDR") != "" {
 		pushBulletAPIAddr = os.Getenv("PUSHBULLETAPIADDR")
@@ -29,7 +43,7 @@ func pushBullet(alert template.Alert) {
 
 	pushBulletChannelTag := "santaclausgoeswild"
 	if os.Getenv("PUSHBULLETCHANNELTAG") != "" {
-		pushBulletAPIAddr = os.Getenv("PUSHBULLETCHANNELTAG")
+		pushBulletChannelTag = os.Getenv("PUSHBULLETCHANNELTAG")
 	}
 
 	pushBulletAPIToken := ""
@@ -37,15 +51,40 @@ func pushBullet(alert template.Alert) {
 		pushBulletAPIToken = os.Getenv("PUSHBULLETAPITOKEN")
 	}
 
-	tr := http.DefaultTransport.(*http.Transport)
-	tr.TLSClientConfig.InsecureSkipVerify = true
-	
+	// Get the SystemCertPool, continue with an empty pool on error
+	rootCAs, _ := x509.SystemCertPool()
+	if rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
+
+	if localCertFile != "" {
+		// Read in the cert file
+		certs, err := ioutil.ReadFile(localCertFile)
+		if err != nil {
+			log.Fatalf("Failed to read custom CA file %q: %v", localCertFile, err)
+		}
+
+		// Append our cert to the system pool
+		if ok := rootCAs.AppendCertsFromPEM(certs); !ok {
+			log.Println("No certs appended, using system certs only")
+		} else {
+			log.Println("Custom certs appended succesfully!")
+		}
+	}
+
+	config := &tls.Config{
+		InsecureSkipVerify: InsecureSkipVerify,
+		RootCAs:            rootCAs,
+	}
+
+	tr := &http.Transport{TLSClientConfig: config}
+
 	timeout := time.Duration(5 * time.Second)
-	client := http.Client{
-		Timeout: timeout,
+	client := &http.Client{
+		Timeout:   timeout,
 		Transport: tr,
 	}
-	
+
 	requestBody, err := json.Marshal(map[string]string{
 		"body":        fmt.Sprintf("Started at %s \nStatus: %s \nSeverity: %s \nLabels %v", alert.StartsAt, alert.Status, strings.ToUpper(alert.Labels["severity"]), alert.Labels),
 		"title":       "[" + strings.ToUpper(alert.Labels["severity"]) + "] " + alert.Annotations["summary"],
