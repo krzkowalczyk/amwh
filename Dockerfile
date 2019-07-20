@@ -1,13 +1,13 @@
 # Dockerfile References: https://docs.docker.com/engine/reference/builder/
 
 # Start from golang v1.11 base image
-FROM golang:latest
+FROM golang:1.12.7
 
 # Add Maintainer Info
-LABEL maintainer="Rajeev Singh <rajeevhub@gmail.com>"
+LABEL maintainer="Krzysztof Kowalczyk"
 
 # Set the Current Working Directory inside the container
-WORKDIR $GOPATH/src/github.com/callicoder/go-docker
+WORKDIR $GOPATH/src/github.com/krzkowalczyk/amwh
 
 # Copy everything from the current directory to the PWD(Present Working Directory) inside the container
 COPY . .
@@ -19,8 +19,7 @@ RUN go get -d -v ./...
 # Install the package
 RUN go build -o main .
 
-RUN adduser -S -D -H -h /app appuser
-USER appuser
+USER 10001
 
 # This container exposes port 8080 to the outside world
 EXPOSE 8080
